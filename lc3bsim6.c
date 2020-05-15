@@ -1005,27 +1005,27 @@ void AGEX_stage() {
   int addr1Out = (Get_ADDR1MUX(PS.AGEX_CS)) ? PS.AGEX_SR1 : PS.AGEX_NPC;
   int addr2Out;
   switch(Get_ADDR2MUX(PS.AGEX_CS)){
-  case default: 
-    addr2Out = 0; break;
-  case 1:
-    addr2Out = (PS.AGEX_IR & 0x3F) | ((PS.AGEX_IR >> 5) * 0xFFFFFFC0); break;
-  case 2:
-    addr2Out = (PS.AGEX_IR & 0x1FF) | ((PS.AGEX_IR >> 8) * 0xFFFFFE00); break;
-  case 3:
-    addr2Out = (PS.AGEX_IR & 0x7FF) | ((PS.AGEX_IR >> 10) * 0xFFFFF800); break;
+    default: 
+      addr2Out = 0; break;
+    case 1:
+      addr2Out = (PS.AGEX_IR & 0x3F) | ((PS.AGEX_IR >> 5) * 0xFFFFFFC0); break;
+    case 2:
+      addr2Out = (PS.AGEX_IR & 0x1FF) | ((PS.AGEX_IR >> 8) * 0xFFFFFE00); break;
+    case 3:
+      addr2Out = (PS.AGEX_IR & 0x7FF) | ((PS.AGEX_IR >> 10) * 0xFFFFF800); break;
   }
   if(Get_LSHF1(PS.AGEX_CS)) addr2Out = addr2Out << 1;
   int addOut = addr2Out + addr1Out;
   int addressOut = (Get_ADDRESSMUX(PS.AGEX_CS)) ? addOut : ((PS.AGEX_IR & 0xFF) << 1);
   
   //ALU
-  int sr2Out = (Get_SR2MUX(PS.AGEX_CS)) ? ((PS.AGEX_IR & 0x1F) | ((PS.AGEX.IR >> 4) * 0xFFFFFFE0)) : PS.AGEX_SR2;
+  int sr2Out = (Get_SR2MUX(PS.AGEX_CS)) ? ((PS.AGEX_IR & 0x1F) | ((PS.AGEX_IR >> 4) * 0xFFFFFFE0)) : PS.AGEX_SR2;
   int aluOut;
   switch(Get_ALUK(PS.AGEX_CS)){
-  case default: aluOut = PS.AGEX_SR1 + sr2Out; break;
-  case 1:       aluOut = PS.AGEX_SR1 & sr2Out; break;
-  case 2:       aluOut = PS.AGEX_SR1 ^ sr2Out; break;
-  case 3:       aluOut = sr2Out; break;
+    default: aluOut = PS.AGEX_SR1 + sr2Out; break;
+    case 1: aluOut = PS.AGEX_SR1 & sr2Out; break;
+    case 2: aluOut = PS.AGEX_SR1 ^ sr2Out; break;
+    case 3: aluOut = sr2Out; break;
   }
 
   //SHF
@@ -1043,9 +1043,9 @@ void AGEX_stage() {
   int resultOut = (Get_ALU_RESULTMUX(PS.AGEX_CS)) ? aluOut : shfOut;
 
   //Other outputs
-  v_agex_ld_cc = Get_AGEX_LD_CC(PS.AGEX_CS) && AGEX.V;
-  v_agex_ld_reg = Get_AGEX_LD_REG(PS.AGEX_CS) && AGEX.V;
-  v_agex_br_stall = Get_AGEX_BR_STALL(PS.AGEX_CS) && AGEX.V;
+  v_agex_ld_cc = Get_AGEX_LD_CC(PS.AGEX_CS) && PS.AGEX_V;
+  v_agex_ld_reg = Get_AGEX_LD_REG(PS.AGEX_CS) && PS.AGEX_V;
+  v_agex_br_stall = Get_AGEX_BR_STALL(PS.AGEX_CS) && PS.AGEX_V;
 
   if (LD_MEM) {
     NEW_PS.MEM_ADDRESS = addressOut & 0xFFFF;
