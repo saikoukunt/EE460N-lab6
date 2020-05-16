@@ -956,7 +956,10 @@ void MEM_stage() {
   if(v_dcache_en) dcache_access(dcache_addr, &read_word, write_word, &dcache_r, mem_w0, mem_w1);
   
   //sign extend 
-  if(Get_DATA_SIZE(PS.MEM_CS) == 0) read_word = read_word | ((read_word >> 7) * 0xFF00);
+  if(Get_DATA_SIZE(PS.MEM_CS) == 0){ 
+    read_word = (PS.MEM_ADDRESS % 2) ? read_word >> 8 : read_word & 0xFF;
+    read_word = read_word | ((read_word >> 7) * 0xFF00);
+  }
 
   //memstall
   mem_stall = !dcache_r && v_dcache_en;
