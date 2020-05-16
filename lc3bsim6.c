@@ -804,7 +804,6 @@ void dcache_access(int dcache_addr, int *read_word, int write_word, int *dcache_
 /*                                                             */
 /***************************************************************/
 void icache_access(int icache_addr, int *read_word, int *icache_r) {
-	
   int addr = icache_addr >> 1 ; 
   int random = CYCLE_COUNT % 13;
 
@@ -940,6 +939,7 @@ void MEM_stage() {
   int ii,jj = 0;
   v_dcache_en = Get_DCACHE_EN(PS.MEM_CS) && PS.MEM_V;
 
+  read_word = 0;
   //we logic
   if(!Get_DCACHE_RW(PS.MEM_CS)){
     mem_w0 = 0;
@@ -948,7 +948,6 @@ void MEM_stage() {
   else{
     mem_w0 = Get_DATA_SIZE(PS.MEM_CS) || !(PS.MEM_ADDRESS % 2);
     mem_w1 = Get_DATA_SIZE(PS.MEM_CS) || (PS.MEM_ADDRESS % 2);
-    read_word = 0;
   }
 
   //dcache access
@@ -960,10 +959,10 @@ void MEM_stage() {
   if(Get_DATA_SIZE(PS.MEM_CS) == 0) read_word = read_word | ((read_word >> 7) * 0xFF00);
 
   //memstall
-  mem_stall = dcache_r && v_dcache_en;
+  mem_stall = !dcache_r && v_dcache_en;
 
   //PC things
-  target_pc = PS.MEM_ALU_RESULT;
+  target_pc = PS.MEM_ADDRESS;
   trap_pc = read_word;
   mem_pcmux = 0;
   if(PS.MEM_V){
@@ -987,7 +986,8 @@ void MEM_stage() {
   NEW_PS.SR_NPC = PS.MEM_NPC;
   NEW_PS.SR_ALU_RESULT = PS.MEM_ALU_RESULT;
   NEW_PS.SR_IR = PS.MEM_IR;
-  NEW_PS.SR_V = PS.MEM_V && (v_dcache_en == dcache_r);
+  NEW_PS.SR_DRID = PS.MEM_DRID;
+  NEW_PS.SR_V = PS.MEM_V && !(mem_stall);
 
   for (ii=COPY_SR_CS_START; ii < NUM_MEM_CS_BITS; ii++) {
     NEW_PS.SR_CS [jj++] = PS.MEM_CS [ii];
@@ -1008,18 +1008,19 @@ void AGEX_stage() {
     default: 
       addr2Out = 0; break;
     case 1:
-      addr2Out = (PS.AGEX_IR & 0x3F) | ((PS.AGEX_IR >> 5) * 0xFFFFFFC0); break;
+      addr2Out = (PS.AGEX_IR & 0x3F) | (((PS.AGEX_IR & 0x20) >> 5) * 0xFFFFFFC0); break;
     case 2:
-      addr2Out = (PS.AGEX_IR & 0x1FF) | ((PS.AGEX_IR >> 8) * 0xFFFFFE00); break;
+      addr2Out = (PS.AGEX_IR & 0x1FF) | (((PS.AGEX_IR & 0x100) >> 8) * 0xFFFFFE00); break;
     case 3:
-      addr2Out = (PS.AGEX_IR & 0x7FF) | ((PS.AGEX_IR >> 10) * 0xFFFFF800); break;
+      addr2Out = (PS.AGEX_IR & 0x7FF) | (((PS.AGEX_IR & 0x400) >> 10) * 0xFFFFF800); break;
   }
   if(Get_LSHF1(PS.AGEX_CS)) addr2Out = addr2Out << 1;
+
   int addOut = addr2Out + addr1Out;
   int addressOut = (Get_ADDRESSMUX(PS.AGEX_CS)) ? addOut : ((PS.AGEX_IR & 0xFF) << 1);
   
   //ALU
-  int sr2Out = (Get_SR2MUX(PS.AGEX_CS)) ? ((PS.AGEX_IR & 0x1F) | ((PS.AGEX_IR >> 4) * 0xFFFFFFE0)) : PS.AGEX_SR2;
+  int sr2Out = (Get_SR2MUX(PS.AGEX_CS)) ? ((PS.AGEX_IR & 0x1F) | (((PS.AGEX_IR & 0x10) >> 4) * 0xFFFFFFE0)) : PS.AGEX_SR2;
   int aluOut;
   switch(Get_ALUK(PS.AGEX_CS)){
     default: aluOut = PS.AGEX_SR1 + sr2Out; break;
@@ -1099,11 +1100,11 @@ void DE_stage() {
   }
 
   if (LD_AGEX) {
-    NEW_PS.AGEX_NPC = PS.AGEX_NPC;
-    NEW_PS.AGEX_IR = PS.AGEX_IR;
+    NEW_PS.AGEX_NPC = PS.DE_NPC;
+    NEW_PS.AGEX_IR = PS.DE_IR;
     NEW_PS.AGEX_SR1 = REGS[sr1_id];
     NEW_PS.AGEX_SR2 = REGS[sr2_id];
-    NEW_PS.AGEX_SR2 = (N << 2) + (Z << 1) + P;
+    NEW_PS.AGEX_CC = (N << 2) + (Z << 1) + P;
     NEW_PS.AGEX_DRID = (cStore[DRMUX]) ? 7 : (PS.DE_IR >> 9) & 0x7;
     NEW_PS.AGEX_V = !(dep_stall) && PS.DE_V;
 
@@ -1124,7 +1125,7 @@ void DE_stage() {
 
 /************************* FETCH_stage() *************************/
 void FETCH_stage() {
-  int instr, icache_r;
+  int instr;
   //read instruction
   icache_access(PC, &instr, &icache_r);
 
@@ -1135,17 +1136,19 @@ void FETCH_stage() {
 
   //latch DE
   if(ld_de){
-    PS.DE_NPC = PC + 2;
-    PS.DE_IR = instr;
-    PS.DE_V = icache_r && !(v_de_br_stall || v_agex_br_stall || v_mem_br_stall);
+    NEW_PS.DE_NPC = PC + 2;
+    NEW_PS.DE_IR = instr;
+    NEW_PS.DE_V = icache_r && !(v_de_br_stall || v_agex_br_stall || v_mem_br_stall);
   }
 
   //latch PC
-  switch(mem_pcmux){
-    case 0: PC += 2; break;
-    case 1: PC = target_pc; break;
-    case 2: PC = trap_pc; break;
-    default: printf("Wot\n");
+  if(ld_pc){
+    switch(mem_pcmux){
+      case 0: PC += 2; break;
+      case 1: PC = target_pc; break;
+      case 2: PC = trap_pc; break;
+      default: printf("Wot\n");
+    }
   }
 }  
 
